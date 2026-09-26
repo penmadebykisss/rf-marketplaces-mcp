@@ -11,6 +11,9 @@ const { tools } = await client.listTools();
 console.log(`tools (${tools.length}):`, tools.map(t => t.name).join(', '));
 
 let failed = 0;
+if (tools.length !== 14) { console.log(`FAIL ожидалось 14 инструментов, получено ${tools.length}`); failed++; }
+// SMOKE_OFFLINE=1 — только запуск сервера и список инструментов (для CI: WB может не пускать зарубежные IP)
+const OFFLINE = process.env.SMOKE_OFFLINE === '1';
 async function run(name, args, check) {
   const t0 = Date.now();
   const r = await client.callTool({ name, arguments: args });
@@ -21,12 +24,14 @@ async function run(name, args, check) {
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name} (${Date.now() - t0} мс): ${text.replace(/\s+/g, ' ').slice(0, 220)}`);
 }
 
+if (!OFFLINE) {
 await run('wb_product', { articles: [ARTICLE, 250000000] }, d => d.products.length >= 1 && d.products[0].price_rub > 0);
 await run('wb_product_details', { article: ARTICLE }, d => d.name && d.characteristics.length > 0);
 await run('wb_price_history', { article: ARTICLE }, d => Array.isArray(d.history));
 await run('wb_reviews', { article: ARTICLE, limit: 3 }, d => d.total > 0 && d.reviews.length > 0);
 await run('wb_reviews', { article: ARTICLE, limit: 3, max_stars: 2 }, d => d.reviews.every(x => x.stars <= 2));
 await run('wb_compare', { articles: [ARTICLE, 1453309500, 1337936355] }, d => d.table.length >= 2 && d.leaders);
+}
 await run('wb_seller_info', {}, (d, text, isErr) => isErr && text.includes('WB_API_TOKEN'));
 
 await client.close();

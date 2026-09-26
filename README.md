@@ -1,5 +1,8 @@
 # rf-marketplaces-mcp — аналитика Wildberries для ИИ-агентов
 
+[![penmadebykisss/rf-marketplaces-mcp MCP server](https://glama.ai/mcp/servers/penmadebykisss/rf-marketplaces-mcp/badges/score.svg)](https://glama.ai/mcp/servers/penmadebykisss/rf-marketplaces-mcp)
+[![CI](https://github.com/penmadebykisss/rf-marketplaces-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/penmadebykisss/rf-marketplaces-mcp/actions/workflows/ci.yml)
+
 MCP-сервер, который даёт Claude, Cursor и другим ИИ-ассистентам данные о **любом товаре Wildberries по артикулу —
 без регистрации и без токена**: цена и скидка, рейтинг и отзывы (в том числе только негативные), остатки и сроки доставки,
 история цены, описание и характеристики, сравнение с конкурентами. Подходит для разведки конкурентов, выбора ниши,
