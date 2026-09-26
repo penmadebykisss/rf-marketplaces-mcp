@@ -7,7 +7,7 @@ import { z } from 'zod';
 import * as pub from './wb-public.js';
 import * as seller from './wb-seller.js';
 
-const server = new McpServer({ name: 'rf-marketplaces', version: '0.1.0' });
+const server = new McpServer({ name: 'rf-marketplaces', version: '0.2.0' });
 
 const ok = data => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
 const fail = e => ({ isError: true, content: [{ type: 'text', text: 'Ошибка: ' + (e?.message || String(e)) }] });
@@ -99,6 +99,50 @@ server.registerTool('wb_compare', {
     },
     not_available: articles.filter(a => !rows.some(r => r.article === a)),
   };
+}));
+
+server.registerTool('wb_review_insights', {
+  title: 'Жалобы покупателей по товарам WB',
+  description: 'Собирает негативные отзывы (по умолчанию 1–3★) сразу по нескольким товарам Wildberries и выделяет частые жалобы: ' +
+    'повторяющиеся фразы и слова, долю негатива, долю отзывов с ответом продавца, свежие примеры. ' +
+    'Полезно, чтобы найти слабые места конкурентов или своего товара и идеи для улучшения. Работает без токена.',
+  inputSchema: {
+    articles: z.array(Article).min(1).max(10),
+    max_stars: z.number().int().min(1).max(4).default(3).describe('Какие оценки считать негативом: не выше этой'),
+  },
+  annotations: readOnly,
+}, safe(async ({ articles, max_stars }) => {
+  const cards = await pub.getCards(articles);
+  const per = await Promise.all(cards.map(async p => {
+    const s = pub.reviewStats(await pub.getReviews(p.root), max_stars);
+    return { article: p.id, name: p.name, rating: p.reviewRating ?? p.rating, loaded_reviews: s.loaded, negative: s.negative,
+      negative_pct: s.negative_pct, seller_answer_pct: s.seller_answer_pct, top_complaints: pub.topTerms(s.negTexts, 10), recent_negative: s.negSamples, _texts: s.negTexts };
+  }));
+  const common = pub.topTerms(per.flatMap(x => x._texts), 15);
+  per.forEach(x => delete x._texts);
+  return {
+    note: 'Термины — частые слова и пары слов в негативных отзывах; число = в скольких отзывах встречается. Для выводов смотрите примеры.',
+    across_all: common, products: per, not_available: articles.filter(a => !cards.some(c => c.id === a)),
+  };
+}));
+
+server.registerTool('wb_card_audit', {
+  title: 'Аудит карточки WB против конкурентов',
+  description: 'Проверяет карточку товара Wildberries и сравнивает её с конкурентами: фото, видео, рич-контент, длина описания, число характеристик, ' +
+    'цена, рейтинг, отзывы, доля негатива, ответы продавца, скорость доставки. Возвращает медианы конкурентов и конкретные рекомендации, что улучшить. ' +
+    'Работает без токена.',
+  inputSchema: {
+    article: Article.describe('Артикул проверяемой карточки'),
+    competitors: z.array(Article).max(10).default([]).describe('Артикулы конкурентов для сравнения (рекомендуется 3–10)'),
+  },
+  annotations: readOnly,
+}, safe(async ({ article, competitors }) => {
+  const cards = await pub.getCards([article, ...competitors.filter(a => a !== article)]);
+  const me = cards.find(c => c.id === article);
+  if (!me) throw new Error(`Товар ${article} не найден на WB`);
+  const all = await Promise.all(cards.map(pub.cardMetrics));
+  const mine = all.find(x => x.article === article), rivals = all.filter(x => x.article !== article);
+  return { card: mine, ...pub.auditAdvice(mine, rivals), competitors: rivals };
 }));
 
 // ================= Кабинет продавца WB (нужен WB_API_TOKEN) =================

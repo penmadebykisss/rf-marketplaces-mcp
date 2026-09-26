@@ -137,3 +137,88 @@ export function summarizeReviews(d, { limit = 20, maxStars } = {}) {
     })),
   };
 }
+
+// ---------- Аналитика поверх данных: аудит карточки и жалобы из отзывов ----------
+
+const STOP = new Set(('и в во не что он на я с со как а то все она так его но да ты к у же вы за бы по только ее мне было вот от меня еще нет о из ему ' +
+  'теперь когда даже ну вдруг ли если уже или ни быть был него до вас нибудь опять уж вам ведь там потом себя ничего ей может они тут где есть надо ' +
+  'ней для мы тебя их чем была сам чтоб без будто чего раз тоже себе под будет ж тогда кто этот того потому этого какой совсем ним здесь этом один ' +
+  'почти мой тем чтобы нее сейчас были куда зачем всех никогда можно при наконец два об другой хоть после над больше тот через эти нас про всего них ' +
+  'какая много разве три эту моя впрочем хорошо свою этой перед иногда лучше чуть том нельзя такой им более всегда конечно всю между это очень товар ' +
+  'товара товаром пришел пришла пришло пришли заказ заказала заказал заказывала вообще просто всё весь вся брала взяла купила купил').split(' '));
+
+function words(text) {
+  return (text.toLowerCase().replace(/ё/g, 'е').match(/[а-яa-z]{4,}/g) || []).filter(w => !STOP.has(w));
+}
+
+/** Частые слова и пары слов в текстах (грубая, но быстрая выжимка тем). */
+export function topTerms(texts, n = 15) {
+  const uni = new Map(), bi = new Map();
+  for (const t of texts) {
+    const w = words(t), seenU = new Set(), seenB = new Set();
+    w.forEach((x, i) => {
+      if (!seenU.has(x)) { seenU.add(x); uni.set(x, (uni.get(x) || 0) + 1); }
+      if (i && !seenB.has(w[i - 1] + ' ' + x)) { const b = w[i - 1] + ' ' + x; seenB.add(b); bi.set(b, (bi.get(b) || 0) + 1); }
+    });
+  }
+  const top = m => [...m].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, n).map(([term, reviews]) => ({ term, reviews }));
+  return { phrases: top(bi), words: top(uni) };
+}
+
+/** Негатив и ответы продавца по сырому ответу отзывов. */
+export function reviewStats(d, maxStars = 3) {
+  const all = d?.feedbacks || [];
+  const neg = all.filter(f => f.productValuation <= maxStars);
+  const answered = all.filter(f => f.answer?.text).length;
+  return {
+    loaded: all.length,
+    negative: neg.length,
+    negative_pct: all.length ? Math.round(neg.length / all.length * 1000) / 10 : null,
+    seller_answer_pct: all.length ? Math.round(answered / all.length * 1000) / 10 : null,
+    negTexts: neg.map(f => [f.cons, f.text].filter(Boolean).join('. ')).filter(Boolean),
+    negSamples: neg.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate)).slice(0, 5)
+      .map(f => ({ date: f.createdDate?.slice(0, 10), stars: f.productValuation, text: [f.cons, f.text].filter(Boolean).join(' | ').slice(0, 300) })),
+  };
+}
+
+const median = a => { const s = a.filter(x => x != null).sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
+
+/** Метрики одной карточки для аудита. */
+export async function cardMetrics(p) {
+  const s = summarizeCard(p);
+  const [info, fb] = await Promise.all([
+    getCardInfo(p.id).catch(() => null),
+    getReviews(p.root).catch(() => null),
+  ]);
+  const rs = fb ? reviewStats(fb) : null;
+  return {
+    article: s.article, name: s.name, seller: s.seller, price_rub: s.price_rub, discount_pct: s.discount_pct,
+    rating: s.rating, reviews: s.reviews, in_stock: s.in_stock_total, delivery_hours: s.delivery_hours,
+    photos: info?.media?.photo_count ?? p.pics ?? null, has_video: !!info?.media?.has_video, has_rich_content: !!info?.has_rich,
+    description_chars: info?.description?.length ?? null, characteristics: info?.options?.length ?? null,
+    negative_pct: rs?.negative_pct ?? null, seller_answer_pct: rs?.seller_answer_pct ?? null,
+  };
+}
+
+/** Рекомендации по карточке относительно конкурентов (медиан). */
+export function auditAdvice(me, rivals) {
+  const tips = [], m = k => median(rivals.map(r => r[k]));
+  const bench = {};
+  for (const k of ['price_rub', 'rating', 'reviews', 'photos', 'description_chars', 'characteristics', 'negative_pct', 'seller_answer_pct', 'delivery_hours'])
+    bench[k] = rivals.length ? m(k) : null;
+  const lt = (k, f = 1) => me[k] != null && bench[k] != null && me[k] < bench[k] * f;
+  const gt = (k, f = 1) => me[k] != null && bench[k] != null && me[k] > bench[k] * f;
+  if ((me.photos ?? 0) < 5 || lt('photos', 0.8)) tips.push(`Мало фото: ${me.photos ?? 0}${bench.photos != null ? ` против ~${bench.photos} у конкурентов` : ''}. Добавьте фото в использовании, детали, размеры/инфографику.`);
+  if (!me.has_video && rivals.some(r => r.has_video)) tips.push('У конкурентов есть видео, у вас нет — добавьте короткий ролик.');
+  if (!me.has_rich_content && rivals.some(r => r.has_rich_content)) tips.push('У конкурентов есть рич-контент — стоит добавить.');
+  if ((me.description_chars ?? 0) < 500 || lt('description_chars', 0.6)) tips.push(`Короткое описание (${me.description_chars ?? 0} знаков${bench.description_chars != null ? `, у конкурентов ~${bench.description_chars}` : ''}): раскройте выгоды и ключевые запросы.`);
+  if (lt('characteristics', 0.7)) tips.push(`Заполнено ${me.characteristics} характеристик против ~${bench.characteristics}: заполните все — они влияют на фильтры и поиск.`);
+  if (gt('price_rub', 1.15)) tips.push(`Цена ${me.price_rub} ₽ выше медианы конкурентов (${bench.price_rub} ₽) больше чем на 15% — нужна причина платить больше (фото, отзывы, комплектация) или корректировка цены.`);
+  if (lt('rating', 1) && bench.rating - me.rating >= 0.2) tips.push(`Рейтинг ${me.rating} ниже, чем у конкурентов (~${bench.rating}). Разберите жалобы через wb_review_insights.`);
+  if (me.negative_pct != null && (me.negative_pct >= 15 || gt('negative_pct', 1.5))) tips.push(`Доля отзывов 1–3★: ${me.negative_pct}%${bench.negative_pct != null ? ` (у конкурентов ~${bench.negative_pct}%)` : ''} — проверьте частые жалобы.`);
+  if (me.seller_answer_pct != null && me.seller_answer_pct < 50) tips.push(`Продавец отвечает только на ${me.seller_answer_pct}% отзывов — ответы повышают доверие.`);
+  if (lt('reviews', 0.3)) tips.push(`Отзывов ${me.reviews} против ~${bench.reviews} у конкурентов — стимулируйте отзывы (вкладыш, баллы за отзыв).`);
+  if (gt('delivery_hours', 1.5)) tips.push(`Доставка дольше конкурентов (${me.delivery_hours} ч против ~${bench.delivery_hours} ч) — разместите товар на ближних складах.`);
+  if (!me.in_stock) tips.push('Товара нет в наличии — карточка теряет позиции.');
+  return { benchmark_median: bench, recommendations: tips.length ? tips : ['Явных слабых мест по сравнению с конкурентами не найдено.'] };
+}
