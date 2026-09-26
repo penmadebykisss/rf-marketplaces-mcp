@@ -1,7 +1,11 @@
-# rf-marketplaces-mcp — Маркетплейсы РФ для ИИ-агентов
+# rf-marketplaces-mcp — аналитика Wildberries для ИИ-агентов
 
-MCP-сервер, который даёт Claude, Cursor и другим ИИ-ассистентам доступ к данным **Wildberries**:
-аналитика любого товара по артикулу (без регистрации) и кабинет продавца через официальное API.
+MCP-сервер, который даёт Claude, Cursor и другим ИИ-ассистентам данные о **любом товаре Wildberries по артикулу —
+без регистрации и без токена**: цена и скидка, рейтинг и отзывы (в том числе только негативные), остатки и сроки доставки,
+история цены, описание и характеристики, сравнение с конкурентами. Подходит для разведки конкурентов, выбора ниши,
+анализа отзывов и ИИ-помощников покупателя.
+
+Для продавцов есть и кабинет через официальное API WB (продажи, заказы, остатки, ответы на отзывы) — достаточно добавить токен.
 
 Спросите ассистента: *«Сравни эти три товара конкурентов по цене и отзывам»*, *«За что ругают артикул 1470151551?»*,
 *«Какие товары у меня заканчиваются на складах?»*, *«Ответь вежливо на новые отзывы без ответа»* — и он сам вызовет нужные инструменты.
@@ -91,10 +95,11 @@ npm test
 
 ## English
 
-**rf-marketplaces-mcp** is an MCP server for Russian marketplaces. It gives Claude, Cursor and other AI assistants
-**Wildberries** data: product analytics by article number with no account required (price, discount, rating, reviews,
-stock, delivery time, price history, competitor comparison) and the seller dashboard through the official WB API
-(sales, orders, warehouse stock, customer reviews and questions with replies, prices).
+**rf-marketplaces-mcp** gives Claude, Cursor and other AI assistants data on **any Wildberries product by article
+number — no account or API token needed**: price and discount, rating and reviews (including negative-only), stock and
+delivery time, price history, description and specs, and side-by-side competitor comparison. Useful for competitor
+research, niche selection, review analysis and shopping assistants. Sellers can also connect their dashboard through the
+official WB API (sales, orders, warehouse stock, replies to reviews and questions, prices).
 
 ```bash
 npx -y github:penmadebykisss/rf-marketplaces-mcp
