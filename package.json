@@ -23,6 +23,12 @@
     "ai-agent"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/penmadebykisss/rf-marketplaces-mcp.git"
+  },
+  "homepage": "https://github.com/penmadebykisss/rf-marketplaces-mcp#readme",
+  "bugs": "https://github.com/penmadebykisss/rf-marketplaces-mcp/issues",
   "engines": {
     "node": ">=18"
   },

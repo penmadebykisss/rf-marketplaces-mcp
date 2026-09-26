@@ -34,25 +34,19 @@ MCP-сервер, который даёт Claude, Cursor и другим ИИ-а
 
 ## Установка
 
-Нужен [Node.js](https://nodejs.org) 18+.
-
-```bash
-git clone https://github.com/penmadebykisss/rf-marketplaces-mcp.git
-cd rf-marketplaces-mcp
-npm install
-```
+Нужен только [Node.js](https://nodejs.org) 18+ — сервер запускается прямо с GitHub через `npx`, клонировать ничего не нужно.
 
 ### Claude Desktop
 
-Добавьте в `claude_desktop_config.json` (Настройки → Разработчик → Изменить конфиг):
+Добавьте в `claude_desktop_config.json` (Настройки → Разработчик → Изменить конфиг) и перезапустите Claude:
 
 ```json
 {
   "mcpServers": {
     "rf-marketplaces": {
-      "command": "node",
-      "args": ["C:/путь/к/rf-marketplaces-mcp/src/index.js"],
-      "env": { "WB_API_TOKEN": "ваш токен (необязательно)" }
+      "command": "npx",
+      "args": ["-y", "github:penmadebykisss/rf-marketplaces-mcp"],
+      "env": { "WB_API_TOKEN": "токен продавца (необязательно)" }
     }
   }
 }
@@ -61,12 +55,21 @@ npm install
 ### Claude Code
 
 ```bash
-claude mcp add rf-marketplaces -e WB_API_TOKEN=ваш_токен -- node /путь/к/rf-marketplaces-mcp/src/index.js
+claude mcp add rf-marketplaces -e WB_API_TOKEN=токен -- npx -y github:penmadebykisss/rf-marketplaces-mcp
 ```
 
-### Cursor и другие клиенты
+### Cursor, Windsurf и другие клиенты
 
-Любой клиент с поддержкой MCP по stdio: команда `node`, аргумент — путь к `src/index.js`.
+Любой клиент с поддержкой MCP по stdio: команда `npx`, аргументы `-y github:penmadebykisss/rf-marketplaces-mcp`.
+Без токена продавца работают все инструменты аналитики товаров.
+
+### Из исходников
+
+```bash
+git clone https://github.com/penmadebykisss/rf-marketplaces-mcp.git
+cd rf-marketplaces-mcp && npm install
+node src/index.js
+```
 
 ## Токен продавца Wildberries
 
@@ -85,6 +88,19 @@ claude mcp add rf-marketplaces -e WB_API_TOKEN=ваш_токен -- node /пут
 ```bash
 npm test
 ```
+
+## English
+
+**rf-marketplaces-mcp** is an MCP server for Russian marketplaces. It gives Claude, Cursor and other AI assistants
+**Wildberries** data: product analytics by article number with no account required (price, discount, rating, reviews,
+stock, delivery time, price history, competitor comparison) and the seller dashboard through the official WB API
+(sales, orders, warehouse stock, customer reviews and questions with replies, prices).
+
+```bash
+npx -y github:penmadebykisss/rf-marketplaces-mcp
+```
+
+Set `WB_API_TOKEN` to a Wildberries seller API token to enable the `wb_seller_*` tools. Ozon and Yandex Market are planned.
 
 ## Лицензия
 
