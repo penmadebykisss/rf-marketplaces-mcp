@@ -34,7 +34,9 @@ server.registerTool('wb_product', {
 
 server.registerTool('wb_product_details', {
   title: 'Описание и характеристики товара WB',
-  description: 'Полное описание, характеристики и состав товара Wildberries из карточки продавца. Работает без токена.',
+  description: 'Текстовое содержимое карточки товара Wildberries: название, предмет и категория, артикул продавца, полное описание, ' +
+    'все характеристики (название — значение) и состав. Используйте, чтобы изучить, как продавец описывает товар, или сравнить описания; ' +
+    'цена, рейтинг и остатки — в wb_product, отзывы — в wb_reviews. Только чтение, работает без токена.',
   inputSchema: { article: Article },
   annotations: readOnly,
 }, safe(async ({ article }) => {
@@ -223,8 +225,9 @@ server.registerTool('wb_seller_orders', {
 
 server.registerTool('wb_seller_stocks', {
   title: 'Кабинет продавца WB: остатки',
-  description: 'Остатки товаров продавца на складах WB: по артикулам и складам, в пути к клиенту и от клиента, список закончившихся и заканчивающихся. ' +
-    'Нужен WB_API_TOKEN («Статистика»).',
+  description: 'Остатки своих товаров на складах WB (FBO): по каждому артикулу — всего штук, разбивка по складам, в пути к клиенту и от клиента; ' +
+    'отдельно списки закончившихся и заканчивающихся товаров (порог — low_threshold). Используйте, чтобы понять, что пора поставлять. ' +
+    'Только чтение. Нужен WB_API_TOKEN с категорией «Статистика»; данные WB обновляются примерно раз в 30 минут.',
   inputSchema: { low_threshold: z.number().int().min(0).default(5).describe('Сколько штук и меньше считать «заканчивается»') },
   annotations: readOnly,
 }, safe(async ({ low_threshold }) => seller.summarizeStocks(await seller.getStocks(), low_threshold)));
@@ -249,8 +252,14 @@ server.registerTool('wb_seller_answer_feedback', {
 
 server.registerTool('wb_seller_questions', {
   title: 'Кабинет продавца WB: вопросы покупателей',
-  description: 'Вопросы покупателей о товарах продавца (по умолчанию — без ответа). Нужен WB_API_TOKEN («Отзывы и вопросы»).',
-  inputSchema: { answered: z.boolean().default(false), take: z.number().int().min(1).max(10000).default(30), skip: z.number().int().min(0).default(0) },
+  description: 'Список вопросов покупателей о товарах продавца, новые сверху: id вопроса, дата, текст, артикул, название товара и ответ, если он есть. ' +
+    'По умолчанию — только вопросы без ответа. id передайте в wb_seller_answer_question, чтобы ответить. ' +
+    'Только чтение. Нужен WB_API_TOKEN с категорией «Отзывы и вопросы».',
+  inputSchema: {
+    answered: z.boolean().default(false).describe('false — вопросы без ответа, true — уже отвеченные'),
+    take: z.number().int().min(1).max(10000).default(30).describe('Сколько вопросов вернуть'),
+    skip: z.number().int().min(0).default(0).describe('Сколько пропустить (для постраничного просмотра)'),
+  },
   annotations: readOnly,
 }, safe(args => seller.listQuestions(args)));
 
@@ -264,8 +273,13 @@ server.registerTool('wb_seller_answer_question', {
 
 server.registerTool('wb_seller_prices', {
   title: 'Кабинет продавца WB: цены и скидки',
-  description: 'Текущие цены и скидки продавца по артикулам. Нужен WB_API_TOKEN («Цены и скидки»).',
-  inputSchema: { limit: z.number().int().min(1).max(1000).default(100), offset: z.number().int().min(0).default(0) },
+  description: 'Текущие цены своих товаров в кабинете продавца: артикул WB, артикул продавца, цена до скидки, скидка продавца в % и цена со скидкой (в рублях). ' +
+    'Показывает цены, установленные продавцом, без СПП и акций WB; цену на витрине и цены конкурентов смотрите в wb_product / wb_price_watch. ' +
+    'Только чтение. Нужен WB_API_TOKEN с категорией «Цены и скидки».',
+  inputSchema: {
+    limit: z.number().int().min(1).max(1000).default(100).describe('Сколько товаров вернуть'),
+    offset: z.number().int().min(0).default(0).describe('Сколько пропустить (для постраничного просмотра)'),
+  },
   annotations: readOnly,
 }, safe(args => seller.listPrices(args)));
 
