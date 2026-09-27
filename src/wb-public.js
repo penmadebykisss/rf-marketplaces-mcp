@@ -118,13 +118,14 @@ export async function getReviews(cardId) {
 export function summarizeReviews(d, { limit = 20, maxStars } = {}) {
   let list = (d?.feedbacks || []).slice().sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
   if (maxStars) list = list.filter(f => f.productValuation <= maxStars);
-  const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  for (const f of d?.feedbacks || []) if (dist[f.productValuation] != null) dist[f.productValuation]++;
+  const dist = fullDistribution(d);
+  const hiddenNeg = maxStars && !list.length ? Object.entries(dist).filter(([k]) => k <= maxStars).reduce((a, [, v]) => a + v, 0) : 0;
   return {
     average: d?.valuation ? Number(d.valuation) : null,
     total: d?.feedbackCount ?? (d?.feedbacks || []).length,
     loaded: (d?.feedbacks || []).length,
     stars_distribution: dist,
+    note: hiddenNeg ? `WB отдаёт только последние ${(d?.feedbacks || []).length} отзывов; среди них нет оценок ≤${maxStars}, хотя всего таких ${hiddenNeg} — они более старые.` : undefined,
     reviews: list.slice(0, limit).map(f => ({
       date: f.createdDate?.slice(0, 10),
       stars: f.productValuation,
@@ -165,15 +166,36 @@ export function topTerms(texts, n = 15) {
   return { phrases: top(bi), words: top(uni) };
 }
 
+/** Распределение оценок по всем отзывам карточки (WB считает его сам), иначе — по загруженным. */
+export function fullDistribution(d) {
+  const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  if (d?.valuationDistribution) for (const k in dist) dist[k] = Number(d.valuationDistribution[k]) || 0;
+  else for (const f of d?.feedbacks || []) if (dist[f.productValuation] != null) dist[f.productValuation]++;
+  return dist;
+}
+
+/** Теги отзывов, которые WB выделяет сам (например «Качество»: плюсов/минусов). */
+export async function getReviewTags(cardId) {
+  return cached('tags:' + cardId, 3_600_000, async () => {
+    const [host] = await request(`https://feedback-bt.wildberries.ru/feedback/api/v2/host?imt=${cardId}`, { headers: WB_HEADERS }).catch(() => []);
+    const d = await request(`${host || 'https://feedback-view-03.wb.ru'}/feedbacks/tags/v1/${cardId}?lang=ru`, { headers: WB_HEADERS });
+    return (d?.summary || []).map(t => ({ tag: t.name, plus: t.plus_count, minus: t.minus_count }))
+      .sort((a, b) => b.minus - a.minus || b.plus - a.plus);
+  });
+}
+
 /** Негатив и ответы продавца по сырому ответу отзывов. */
 export function reviewStats(d, maxStars = 3) {
   const all = d?.feedbacks || [];
   const neg = all.filter(f => f.productValuation <= maxStars);
   const answered = all.filter(f => f.answer?.text).length;
+  const dist = fullDistribution(d), total = Object.values(dist).reduce((a, b) => a + b, 0);
+  const negTotal = Object.entries(dist).filter(([k]) => k <= maxStars).reduce((a, [, v]) => a + v, 0);
   return {
     loaded: all.length,
-    negative: neg.length,
-    negative_pct: all.length ? Math.round(neg.length / all.length * 1000) / 10 : null,
+    negative: negTotal,
+    negative_in_loaded: neg.length,
+    negative_pct: total ? Math.round(negTotal / total * 1000) / 10 : null,
     seller_answer_pct: all.length ? Math.round(answered / all.length * 1000) / 10 : null,
     negTexts: neg.map(f => [f.cons, f.text].filter(Boolean).join('. ')).filter(Boolean),
     negSamples: neg.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate)).slice(0, 5)

@@ -101,6 +101,46 @@ server.registerTool('wb_compare', {
   };
 }));
 
+server.registerTool('wb_price_watch', {
+  title: 'Мониторинг цен конкурентов WB',
+  description: 'Следит за ценами нескольких товаров Wildberries сразу: текущая цена против истории (минимум, максимум, средняя), ' +
+    'изменение за последние недели и пометки — цена на минимуме, резкое снижение или рост, распродажа. Удобно регулярно проверять конкурентов ' +
+    'и ловить, кто демпингует. Работает без токена.',
+  inputSchema: {
+    articles: z.array(Article).min(1).max(20),
+    weeks: z.number().int().min(1).max(52).default(4).describe('За сколько последних недель считать изменение цены'),
+  },
+  annotations: readOnly,
+}, safe(async ({ articles, weeks }) => {
+  const cards = (await pub.getCards(articles)).map(pub.summarizeCard);
+  const rows = await Promise.all(cards.map(async c => {
+    const h = await pub.getPriceHistory(c.article).catch(() => []);
+    const now = c.price_rub, prices = h.map(x => x.price_rub).filter(x => x != null);
+    const row = { article: c.article, name: c.name, seller: c.seller, price_rub: now, discount_pct: c.discount_pct, in_stock: c.in_stock_total, history_points: prices.length };
+    if (!prices.length || now == null) return { ...row, signals: ['нет истории цен'] };
+    const min = Math.min(...prices), max = Math.max(...prices), avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+    const cut = new Date(Date.now() - weeks * 7 * 864e5).toISOString().slice(0, 10);
+    const base = (h.find(x => x.date >= cut) || h[h.length - 1]).price_rub;
+    const pct = (a, b) => b ? Math.round((a / b - 1) * 1000) / 10 : null;
+    const change = pct(now, base), vsAvg = pct(now, avg), signals = [];
+    if (now <= min) signals.push('цена на историческом минимуме');
+    if (now >= max) signals.push('цена на историческом максимуме');
+    if (change != null && change <= -10) signals.push(`снижение на ${-change}% за ${weeks} нед.`);
+    if (change != null && change >= 10) signals.push(`рост на ${change}% за ${weeks} нед.`);
+    if (vsAvg != null && vsAvg <= -15) signals.push('заметно дешевле своей средней цены — возможна распродажа');
+    return { ...row, min_rub: min, max_rub: max, avg_rub: avg, change_pct: change, vs_avg_pct: vsAvg, signals };
+  }));
+  const priced = rows.filter(r => r.price_rub != null).sort((a, b) => a.price_rub - b.price_rub);
+  return {
+    period_weeks: weeks,
+    cheapest_now: priced[0]?.article ?? null,
+    biggest_drop: rows.filter(r => r.change_pct != null).sort((a, b) => a.change_pct - b.change_pct)[0]?.article ?? null,
+    products: rows,
+    not_available: articles.filter(a => !cards.some(c => c.article === a)),
+    note: 'История цен WB — еженедельные точки. Для постоянного мониторинга вызывайте инструмент регулярно (например, раз в день).',
+  };
+}));
+
 server.registerTool('wb_review_insights', {
   title: 'Жалобы покупателей по товарам WB',
   description: 'Собирает негативные отзывы (по умолчанию 1–3★) сразу по нескольким товарам Wildberries и выделяет частые жалобы: ' +
@@ -114,14 +154,18 @@ server.registerTool('wb_review_insights', {
 }, safe(async ({ articles, max_stars }) => {
   const cards = await pub.getCards(articles);
   const per = await Promise.all(cards.map(async p => {
-    const s = pub.reviewStats(await pub.getReviews(p.root), max_stars);
-    return { article: p.id, name: p.name, rating: p.reviewRating ?? p.rating, loaded_reviews: s.loaded, negative: s.negative,
-      negative_pct: s.negative_pct, seller_answer_pct: s.seller_answer_pct, top_complaints: pub.topTerms(s.negTexts, 10), recent_negative: s.negSamples, _texts: s.negTexts };
+    const [fb, tags] = await Promise.all([pub.getReviews(p.root), pub.getReviewTags(p.root).catch(() => [])]);
+    const s = pub.reviewStats(fb, max_stars);
+    return { article: p.id, name: p.name, rating: p.reviewRating ?? p.rating, loaded_reviews: s.loaded, negative_total: s.negative,
+      negative_pct: s.negative_pct, negative_in_loaded: s.negative_in_loaded, seller_answer_pct: s.seller_answer_pct,
+      wb_tags: tags.slice(0, 10), top_complaints: pub.topTerms(s.negTexts, 10), recent_negative: s.negSamples, _texts: s.negTexts,
+      note: s.negative && !s.negative_in_loaded ? 'WB отдаёт только последние ~1000 отзывов, негатив в них не попал — жалобы по тексту недоступны, смотрите wb_tags и распределение.' : undefined };
   }));
   const common = pub.topTerms(per.flatMap(x => x._texts), 15);
   per.forEach(x => delete x._texts);
   return {
-    note: 'Термины — частые слова и пары слов в негативных отзывах; число = в скольких отзывах встречается. Для выводов смотрите примеры.',
+    note: 'Термины — частые слова и пары слов в негативных отзывах среди последних ~1000 (больше WB не отдаёт); число = в скольких отзывах встречается. ' +
+      'wb_tags — темы, которые WB сам выделяет из всех отзывов (plus/minus — сколько отзывов хвалят/ругают). negative_pct считается по всем отзывам.',
     across_all: common, products: per, not_available: articles.filter(a => !cards.some(c => c.id === a)),
   };
 }));
