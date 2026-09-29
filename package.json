@@ -1,6 +1,6 @@
 {
   "name": "rf-marketplaces-mcp",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "MCP-сервер для российских маркетплейсов: аналитика товаров Wildberries по артикулу и кабинет продавца через официальное API",
   "type": "module",
   "bin": {

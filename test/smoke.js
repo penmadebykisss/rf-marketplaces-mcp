@@ -36,6 +36,16 @@ await run('wb_review_insights', { articles: [ARTICLE, 1453309500] }, d => d.prod
 await run('wb_card_audit', { article: ARTICLE, competitors: [1453309500, 1337936355] }, d => d.card.photos > 0 && d.recommendations.length > 0);
 }
 await run('wb_seller_info', {}, (d, text, isErr) => isErr && text.includes('WB_API_TOKEN'));
+// Без токена каждый инструмент кабинета продавца должен отказать с понятной подсказкой, не обращаясь к WB
+const noToken = (d, text, isErr) => isErr && text.includes('WB_API_TOKEN');
+await run('wb_seller_sales', {}, noToken);
+await run('wb_seller_orders', {}, noToken);
+await run('wb_seller_stocks', {}, noToken);
+await run('wb_seller_feedbacks', {}, noToken);
+await run('wb_seller_answer_feedback', { id: 'x', text: 'Спасибо за отзыв' }, noToken);
+await run('wb_seller_questions', {}, noToken);
+await run('wb_seller_answer_question', { id: 'x', text: 'Здравствуйте' }, noToken);
+await run('wb_seller_prices', {}, noToken);
 
 await client.close();
 console.log(failed ? `\nПровалено: ${failed}` : '\nВсе проверки пройдены');

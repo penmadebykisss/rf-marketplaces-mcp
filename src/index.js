@@ -7,7 +7,7 @@ import { z } from 'zod';
 import * as pub from './wb-public.js';
 import * as seller from './wb-seller.js';
 
-const server = new McpServer({ name: 'rf-marketplaces', version: '0.2.0' });
+const server = new McpServer({ name: 'rf-marketplaces', version: '1.0.0' });
 
 const ok = data => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
 const fail = e => ({ isError: true, content: [{ type: 'text', text: 'Ошибка: ' + (e?.message || String(e)) }] });
@@ -16,7 +16,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const daysAgo = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 
 const Article = z.number().int().positive().describe('Артикул Wildberries (nmId), число из ссылки wildberries.ru/catalog/<артикул>/detail.aspx');
-const readOnly = { readOnlyHint: true, openWorldHint: true };
+const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
 // ================= Публичные данные WB (без токена) =================
 
