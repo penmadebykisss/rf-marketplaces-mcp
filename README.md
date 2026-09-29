@@ -101,6 +101,14 @@ node src/index.js
 npm test
 ```
 
+## Нужна настройка или доработка?
+
+Подключу этот сервер под ключ: установка, настройка под ваши данные и процессы, доработка под нестандартные поля,
+ежедневные сводки. Пишите в Telegram **[@penmadebykisss](https://t.me/penmadebykisss)** или оставьте заявку на
+[penmadebykisss.github.io](https://penmadebykisss.github.io).
+
+*Need help setting this up or a custom MCP server? Telegram [@penmadebykisss](https://t.me/penmadebykisss).*
+
 ## English
 
 **rf-marketplaces-mcp** gives Claude, Cursor and other AI assistants data on **any Wildberries product by article
